@@ -217,9 +217,25 @@ async function handleProxyRequest(request, targetUrlParam, currentOrigin) {
   const urlMatch = request.url.match(/[?&]url=([^&]+(?:&.*)?)/)
   if (urlMatch) fullTargetUrl = decodeURIComponent(urlMatch[1])
 
+  // 🔑 关键修复：提取并传递额外的 query 参数（如 ac=list, ac=detail 等）
+  const reqUrl = new URL(request.url)
+  const extraParams = new URLSearchParams()
+
+  // 遍历所有 query 参数，把除了 url 之外的参数都加到目标 URL
+  for (const [key, value] of reqUrl.searchParams) {
+    if (key !== 'url') {
+      extraParams.append(key, value)
+    }
+  }
+
   let targetURL
   try {
     targetURL = new URL(fullTargetUrl)
+
+    // 🔑 将额外参数追加到目标 URL
+    for (const [key, value] of extraParams) {
+      targetURL.searchParams.append(key, value)
+    }
   } catch {
     await logError('proxy', { message: 'Invalid URL', url: fullTargetUrl })
     return errorResponse('Invalid URL', { url: fullTargetUrl }, 400)
