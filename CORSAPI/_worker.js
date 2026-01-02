@@ -242,9 +242,20 @@ async function handleProxyRequest(request, targetUrlParam, currentOrigin) {
   }
 
   try {
+    // 🔑 关键修复：过滤掉会导致问题的 headers (如 Host, Origin 等)
+    const cleanHeaders = new Headers()
+    for (const [key, value] of request.headers) {
+      const lowerKey = key.toLowerCase()
+      // 跳过会导致冲突的 headers
+      if (lowerKey !== 'host' && lowerKey !== 'origin' && lowerKey !== 'referer' &&
+          !lowerKey.startsWith('cf-') && !lowerKey.startsWith('x-forwarded-')) {
+        cleanHeaders.set(key, value)
+      }
+    }
+
     const proxyRequest = new Request(targetURL.toString(), {
       method: request.method,
-      headers: request.headers,
+      headers: cleanHeaders,
       body: request.method !== 'GET' && request.method !== 'HEAD'
         ? await request.arrayBuffer()
         : undefined,
