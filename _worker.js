@@ -5,7 +5,7 @@ export default {
     if (env && env.KV && typeof globalThis.KV === 'undefined') {
       globalThis.KV = env.KV
     }
-    
+
     return handleRequest(request)
   }
 }
@@ -288,7 +288,7 @@ async function handleFormatRequest(formatParam, sourceParam, prefixParam, defaul
 
     const selectedSource = JSON_SOURCES[sourceParam] || JSON_SOURCES['full']
     const data = await getCachedJSON(selectedSource)
-    
+
     const newData = config.proxy
       ? addOrReplacePrefix(data, prefixParam || defaultPrefix)
       : data
@@ -316,105 +316,154 @@ async function handleHomePage(currentOrigin, defaultPrefix) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>API 中转代理服务</title>
+  <title>CORSAPI - API 中转代理服务</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; line-height: 1.6; }
-    h1 { color: #333; }
-    h2 { color: #555; margin-top: 30px; }
-    code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-size: 14px; }
-    pre { background: #f4f4f4; padding: 15px; border-radius: 5px; overflow-x: auto; }
-    .example { background: #e8f5e9; padding: 15px; border-left: 4px solid #4caf50; margin: 20px 0; }
-    .section { background: #f9f9f9; padding: 15px; border-radius: 5px; margin: 15px 0; }
-    table { width: 100%; border-collapse: collapse; margin: 15px 0; }
-    table td { padding: 8px; border: 1px solid #ddd; }
-    table td:first-child { background: #f5f5f5; font-weight: bold; width: 30%; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 40px 20px;
+      line-height: 1.8;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+    }
+    .container {
+      background: white;
+      border-radius: 12px;
+      padding: 40px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    h1 { color: #667eea; margin-bottom: 10px; font-size: 2.5em; }
+    .subtitle { color: #666; margin-bottom: 30px; font-size: 1.1em; }
+    h2 {
+      color: #333;
+      margin-top: 35px;
+      margin-bottom: 15px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #667eea;
+    }
+    code {
+      background: #f4f4f4;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 0.9em;
+      color: #d63384;
+      font-family: 'Consolas', 'Monaco', monospace;
+    }
+    pre {
+      background: #2d2d2d;
+      color: #f8f8f2;
+      padding: 20px;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin: 15px 0;
+      font-family: 'Consolas', 'Monaco', monospace;
+    }
+    .example {
+      background: #e8f5e9;
+      padding: 20px;
+      border-left: 4px solid #4caf50;
+      margin: 20px 0;
+      border-radius: 4px;
+    }
+    ul { margin: 15px 0; padding-left: 25px; }
+    li { margin: 10px 0; }
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      background: #667eea;
+      color: white;
+      border-radius: 12px;
+      font-size: 0.85em;
+      margin-left: 8px;
+    }
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #eee;
+      color: #666;
+      font-size: 0.9em;
+      text-align: center;
+    }
+    .footer a { color: #667eea; text-decoration: none; }
+    .footer a:hover { text-decoration: underline; }
+    .status {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      background: #4caf50;
+      border-radius: 50%;
+      margin-right: 6px;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
   </style>
 </head>
 <body>
-  <h1>🔄 API 中转代理服务</h1>
-  <p>通用 API 中转代理，用于访问被墙或限制的接口。</p>
-  
-  <h2>使用方法</h2>
-  <p>中转任意 API：在请求 URL 后添加 <code>?url=目标地址</code> 参数</p>
-  <pre>${defaultPrefix}<示例API地址></pre>
-  
-  <h2>配置订阅参数说明</h2>
-  <div class="section">
-    <table>
-      <tr>
-        <td>format</td>
-        <td><code>0</code> 或 <code>raw</code> = 原始 JSON<br>
-            <code>1</code> 或 <code>proxy</code> = 添加代理前缀<br>
-            <code>2</code> 或 <code>base58</code> = 原始 Base58 编码<br>
-            <code>3</code> 或 <code>proxy-base58</code> = 代理 Base58 编码</td>
-      </tr>
-      <tr>
-        <td>source</td>
-        <td><code>jin18</code> = 精简版<br>
-            <code>jingjian</code> = 精简版+成人<br>
-            <code>full</code> = 完整版（默认）</td>
-      </tr>
-      <tr>
-        <td>prefix</td>
-        <td>自定义代理前缀（仅在 format=1 或 3 时生效）</td>
-      </tr>
-    </table>
+  <div class="container">
+    <h1>🔄 CORSAPI</h1>
+    <p class="subtitle"><span class="status"></span>API 中转代理服务正在运行</p>
+
+    <p>基于 Cloudflare Workers 的通用 API 中转代理服务，用于加速和转发 API 请求。</p>
+
+    <h2>📖 基本用法</h2>
+    <p>在 API 请求前添加代理地址和 <code>?url=</code> 参数：</p>
+    <pre>${defaultPrefix}https://api.example.com/endpoint</pre>
+
+    <div class="example">
+      <strong>示例：代理一个 API 请求</strong><br><br>
+      原始请求：<code>https://api.example.com/data?id=123</code><br>
+      通过代理：<code>${currentOrigin}/?url=https://api.example.com/data&id=123</code>
+    </div>
+
+    <h2>🚀 高级用法</h2>
+    <p>使用专属路径避免缓存冲突（推荐）：</p>
+    <pre>${currentOrigin}/p/source1?url=https://api1.example.com/endpoint</pre>
+    <p>为不同 API 源使用不同路径标识符（如 <code>/p/source1</code>、<code>/p/source2</code>），可以：</p>
+    <ul>
+      <li>避免不同源之间的缓存冲突</li>
+      <li>提高客户端兼容性</li>
+      <li>更好的请求管理</li>
+    </ul>
+
+    <h2>🔧 参数转发</h2>
+    <p>所有额外的 query 参数都会自动转发到目标 API：</p>
+    <div class="example">
+      <strong>参数自动转发示例</strong><br><br>
+      请求：<code>${currentOrigin}/?url=https://api.example.com/list&page=1&limit=10</code><br>
+      转发：<code>https://api.example.com/list?page=1&limit=10</code>
+    </div>
+
+    <h2>✨ 功能特性</h2>
+    <ul>
+      <li>✅ 支持所有 HTTP 方法（GET、POST、PUT、DELETE 等）</li>
+      <li>✅ 自动转发请求头和请求体</li>
+      <li>✅ 完整的 CORS 支持</li>
+      <li>✅ 超时保护<span class="badge">9秒</span></li>
+      <li>✅ 自动参数转发</li>
+      <li>✅ 防止递归调用</li>
+      <li>✅ 可选的 KV 缓存支持</li>
+    </ul>
+
+    <h2>🏥 健康检查</h2>
+    <p>访问 <code>/health</code> 端点检查服务状态：</p>
+    <pre>${currentOrigin}/health</pre>
+
+    <div class="footer">
+      <p>基于 <a href="https://github.com/hafrey1/LunaTV-config" target="_blank">hafrey1/LunaTV-config</a> 的 CORSAPI 部分二次开发</p>
+      <p>Powered by Cloudflare Workers</p>
+    </div>
   </div>
-  
-  <h2>配置订阅链接示例</h2>
-    
-  <div class="section">
-    <h3>📦 精简版（jin18）</h3>
-    <p>原始 JSON：<br><code class="copyable">${currentOrigin}?format=0&source=jin18</code> <button class="copy-btn">复制</button></p>
-    <p>中转代理 JSON：<br><code class="copyable">${currentOrigin}?format=1&source=jin18</code> <button class="copy-btn">复制</button></p>
-    <p>原始 Base58：<br><code class="copyable">${currentOrigin}?format=2&source=jin18</code> <button class="copy-btn">复制</button></p>
-    <p>中转 Base58：<br><code class="copyable">${currentOrigin}?format=3&source=jin18</code> <button class="copy-btn">复制</button></p>
-  </div>
-  
-  <div class="section">
-    <h3>📦 精简版+成人（jingjian）</h3>
-    <p>原始 JSON：<br><code class="copyable">${currentOrigin}?format=0&source=jingjian</code> <button class="copy-btn">复制</button></p>
-    <p>中转代理 JSON：<br><code class="copyable">${currentOrigin}?format=1&source=jingjian</code> <button class="copy-btn">复制</button></p>
-    <p>原始 Base58：<br><code class="copyable">${currentOrigin}?format=2&source=jingjian</code> <button class="copy-btn">复制</button></p>
-    <p>中转 Base58：<br><code class="copyable">${currentOrigin}?format=3&source=jingjian</code> <button class="copy-btn">复制</button></p>
-  </div>
-  
-  <div class="section">
-    <h3>📦 完整版（full，默认）</h3>
-    <p>原始 JSON：<br><code class="copyable">${currentOrigin}?format=0&source=full</code> <button class="copy-btn">复制</button></p>
-    <p>中转代理 JSON：<br><code class="copyable">${currentOrigin}?format=1&source=full</code> <button class="copy-btn">复制</button></p>
-    <p>原始 Base58：<br><code class="copyable">${currentOrigin}?format=2&source=full</code> <button class="copy-btn">复制</button></p>
-    <p>中转 Base58：<br><code class="copyable">${currentOrigin}?format=3&source=full</code> <button class="copy-btn">复制</button></p>
-  </div>
-  
-  <h2>支持的功能</h2>
-  <ul>
-    <li>✅ 支持 GET、POST、PUT、DELETE 等所有 HTTP 方法</li>
-    <li>✅ 自动转发请求头和请求体</li>
-    <li>✅ 保留原始响应头（除敏感信息）</li>
-    <li>✅ 完整的 CORS 支持</li>
-    <li>✅ 超时保护（9 秒）</li>
-    <li>✅ 支持多种配置源切换</li>
-    <li>✅ 支持 Base58 编码输出</li>
-  </ul>
-  
-  <script>
-    document.querySelectorAll('.copy-btn').forEach((btn, idx) => {
-      btn.addEventListener('click', () => {
-        const text = document.querySelectorAll('.copyable')[idx].innerText;
-        navigator.clipboard.writeText(text).then(() => {
-          btn.innerText = '已复制！';
-          setTimeout(() => (btn.innerText = '复制'), 1500);
-        });
-      });
-    });
-  </script>
 </body>
 </html>`
 
-  return new Response(html, { 
-    status: 200, 
-    headers: { 'Content-Type': 'text/html; charset=utf-8', ...CORS_HEADERS } 
+  return new Response(html, {
+    status: 200,
+    headers: { 'Content-Type': 'text/html; charset=utf-8', ...CORS_HEADERS }
   })
 }
 
