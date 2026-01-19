@@ -6,7 +6,8 @@ export default {
       globalThis.KV = env.KV
     }
 
-    return handleRequest(request)
+    const servicePath = normalizeServicePath(env && env.SERVICE_PATH)
+    return handleRequest(request, { servicePath })
   }
 }
 
@@ -38,6 +39,11 @@ const FORMAT_CONFIG = {
   'base58': { proxy: false, base58: true },
   '3': { proxy: true, base58: true },
   'proxy-base58': { proxy: true, base58: true }
+}
+
+function normalizeServicePath(value) {
+  if (!value) return ''
+  return String(value).trim().replace(/^\/+|\/+$/g, '')
 }
 
 // Base58 编码函数
@@ -160,21 +166,36 @@ async function logError(type, info) {
 }
 
 // ---------- 主逻辑 ----------
-async function handleRequest(request) {
+async function handleRequest(request, options = {}) {
+  const servicePath = options.servicePath || ''
+  const basePath = servicePath ? `/${servicePath}` : ''
+
+  let reqUrl = new URL(request.url)
+  let pathname = reqUrl.pathname
+
+  if (servicePath) {
+    if (pathname !== basePath && !pathname.startsWith(basePath + '/')) {
+      return new Response('Not Found', { status: 404, headers: CORS_HEADERS })
+    }
+    pathname = pathname.slice(basePath.length) || '/'
+    reqUrl.pathname = pathname
+    request = new Request(reqUrl.toString(), request)
+    reqUrl = new URL(request.url)
+  }
+
   // 快速处理 OPTIONS 请求
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS_HEADERS })
   }
 
-  const reqUrl = new URL(request.url)
-  const pathname = reqUrl.pathname
   const targetUrlParam = reqUrl.searchParams.get('url')
   const formatParam = reqUrl.searchParams.get('format')
   const prefixParam = reqUrl.searchParams.get('prefix')
   const sourceParam = reqUrl.searchParams.get('source')
 
   const currentOrigin = reqUrl.origin
-  const defaultPrefix = currentOrigin + '/?url='
+  const publicOrigin = currentOrigin + basePath
+  const defaultPrefix = publicOrigin + '/?url='
 
   // 🩺 健康检查（最常见的性能检查，提前处理）
   if (pathname === '/health') {
@@ -198,7 +219,7 @@ async function handleRequest(request) {
   }
 
   // 返回首页文档
-  return handleHomePage(currentOrigin, defaultPrefix)
+  return handleHomePage(publicOrigin, defaultPrefix)
 }
 
 // ---------- 代理请求处理子模块 ----------
@@ -310,7 +331,7 @@ async function handleFormatRequest(formatParam, sourceParam, prefixParam, defaul
 }
 
 // ---------- 首页文档处理 ----------
-async function handleHomePage(currentOrigin, defaultPrefix) {
+async function handleHomePage(publicOrigin, defaultPrefix) {
   const html = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -417,12 +438,12 @@ async function handleHomePage(currentOrigin, defaultPrefix) {
     <div class="example">
       <strong>示例：代理一个 API 请求</strong><br><br>
       原始请求：<code>https://api.example.com/data?id=123</code><br>
-      通过代理：<code>${currentOrigin}/?url=https://api.example.com/data&id=123</code>
+      通过代理：<code>${publicOrigin}/?url=https://api.example.com/data&id=123</code>
     </div>
 
     <h2>🚀 高级用法</h2>
     <p>使用专属路径避免缓存冲突（推荐）：</p>
-    <pre>${currentOrigin}/p/source1?url=https://api1.example.com/endpoint</pre>
+    <pre>${publicOrigin}/p/source1?url=https://api1.example.com/endpoint</pre>
     <p>为不同 API 源使用不同路径标识符（如 <code>/p/source1</code>、<code>/p/source2</code>），可以：</p>
     <ul>
       <li>避免不同源之间的缓存冲突</li>
@@ -434,7 +455,7 @@ async function handleHomePage(currentOrigin, defaultPrefix) {
     <p>所有额外的 query 参数都会自动转发到目标 API：</p>
     <div class="example">
       <strong>参数自动转发示例</strong><br><br>
-      请求：<code>${currentOrigin}/?url=https://api.example.com/list&page=1&limit=10</code><br>
+      请求：<code>${publicOrigin}/?url=https://api.example.com/list&page=1&limit=10</code><br>
       转发：<code>https://api.example.com/list?page=1&limit=10</code>
     </div>
 
@@ -451,7 +472,7 @@ async function handleHomePage(currentOrigin, defaultPrefix) {
 
     <h2>🏥 健康检查</h2>
     <p>访问 <code>/health</code> 端点检查服务状态：</p>
-    <pre>${currentOrigin}/health</pre>
+    <pre>${publicOrigin}/health</pre>
 
     <div class="footer">
       <p>
