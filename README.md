@@ -79,6 +79,25 @@ https://api.example.workers.dev/p/source2?url=https://api2.com/vod
 转发：https://example.com/api?ac=list&pg=1
 ```
 
+### 配置订阅
+
+支持直接输出 LunaTV/TVBox 可用配置：
+
+```
+https://api.example.workers.dev?format=0&source=full  # 原始 JSON
+https://api.example.workers.dev?format=1&source=full  # 中转代理 JSON
+https://api.example.workers.dev?format=2&source=full  # 原始 Base58
+https://api.example.workers.dev?format=3&source=full  # 中转 Base58
+```
+
+可用 `source`：
+
+- `jin18`：精简版
+- `jingjian`：精简版+成人
+- `full`：完整版（默认）
+
+`format=1` 和 `format=3` 支持通过 `prefix` 参数指定自定义代理前缀。
+
 ---
 
 ## 健康检查
@@ -108,6 +127,15 @@ https://api.example.workers.dev/health
    - 变量名：`KV`
    - 选择刚才创建的 KV 命名空间
    - 点击 **添加绑定**
+
+### 修改 KV 缓存时间
+
+KV 缓存默认 30 分钟。使用 Wrangler 部署时可以在 `wrangler.toml` 中修改，Cloudflare KV 的 `expirationTtl` 最小值为 60 秒：
+
+```toml
+[vars]
+CACHE_TTL_SECONDS = "1800"
+```
 
 ### 修改超时时间
 

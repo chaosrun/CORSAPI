@@ -7,7 +7,8 @@ export default {
     }
 
     const servicePath = normalizeServicePath(env && env.SERVICE_PATH)
-    return handleRequest(request, { servicePath })
+    const cacheTtl = normalizeCacheTtl(env && env.CACHE_TTL_SECONDS)
+    return handleRequest(request, { servicePath, cacheTtl })
   }
 }
 
@@ -41,9 +42,19 @@ const FORMAT_CONFIG = {
   'proxy-base58': { proxy: true, base58: true }
 }
 
+const DEFAULT_CACHE_TTL_SECONDS = 1800
+const MIN_CACHE_TTL_SECONDS = 60
+
 function normalizeServicePath(value) {
   if (!value) return ''
   return String(value).trim().replace(/^\/+|\/+$/g, '')
+}
+
+function normalizeCacheTtl(value) {
+  const ttl = Number(value)
+  return Number.isInteger(ttl) && ttl >= MIN_CACHE_TTL_SECONDS
+    ? ttl
+    : DEFAULT_CACHE_TTL_SECONDS
 }
 
 // Base58 编码函数
@@ -131,7 +142,7 @@ function addOrReplacePrefix(obj, newPrefix) {
 }
 
 // ---------- 安全版：KV 缓存 ----------
-async function getCachedJSON(url) {
+async function getCachedJSON(url, cacheTtl = DEFAULT_CACHE_TTL_SECONDS) {
   const kvAvailable = typeof KV !== 'undefined' && KV && typeof KV.get === 'function'
 
   if (kvAvailable) {
@@ -147,7 +158,7 @@ async function getCachedJSON(url) {
     const res = await fetch(url)
     if (!res.ok) throw new Error(`Fetch failed: ${res.status}`)
     const data = await res.json()
-    await KV.put(cacheKey, JSON.stringify(data), { expirationTtl: 600 })   // 缓存十分钟
+    await KV.put(cacheKey, JSON.stringify(data), { expirationTtl: cacheTtl })
     return data
   } else {
     const res = await fetch(url)
@@ -168,6 +179,7 @@ async function logError(type, info) {
 // ---------- 主逻辑 ----------
 async function handleRequest(request, options = {}) {
   const servicePath = options.servicePath || ''
+  const cacheTtl = options.cacheTtl || DEFAULT_CACHE_TTL_SECONDS
   const basePath = servicePath ? `/${servicePath}` : ''
 
   let reqUrl = new URL(request.url)
@@ -215,7 +227,7 @@ async function handleRequest(request, options = {}) {
 
   // JSON 格式输出处理
   if (formatParam !== null) {
-    return handleFormatRequest(formatParam, sourceParam, prefixParam, defaultPrefix)
+    return handleFormatRequest(formatParam, sourceParam, prefixParam, defaultPrefix, cacheTtl)
   }
 
   // 返回首页文档
@@ -300,7 +312,7 @@ async function handleProxyRequest(request, targetUrlParam, currentOrigin) {
 }
 
 // ---------- JSON 格式输出处理子模块 ----------
-async function handleFormatRequest(formatParam, sourceParam, prefixParam, defaultPrefix) {
+async function handleFormatRequest(formatParam, sourceParam, prefixParam, defaultPrefix, cacheTtl = DEFAULT_CACHE_TTL_SECONDS) {
   try {
     const config = FORMAT_CONFIG[formatParam]
     if (!config) {
@@ -308,7 +320,7 @@ async function handleFormatRequest(formatParam, sourceParam, prefixParam, defaul
     }
 
     const selectedSource = JSON_SOURCES[sourceParam] || JSON_SOURCES['full']
-    const data = await getCachedJSON(selectedSource)
+    const data = await getCachedJSON(selectedSource, cacheTtl)
 
     const newData = config.proxy
       ? addOrReplacePrefix(data, prefixParam || defaultPrefix)
@@ -332,6 +344,38 @@ async function handleFormatRequest(formatParam, sourceParam, prefixParam, defaul
 
 // ---------- 首页文档处理 ----------
 async function handleHomePage(publicOrigin, defaultPrefix) {
+  const escapeHtml = value => String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+
+  const subscriptionSources = [
+    { key: 'jin18', title: '精简版（jin18）' },
+    { key: 'jingjian', title: '精简版+成人（jingjian）' },
+    { key: 'full', title: '完整版（full，默认）' }
+  ]
+  const subscriptionFormats = [
+    { value: '0', label: '原始 JSON' },
+    { value: '1', label: '中转代理 JSON' },
+    { value: '2', label: '原始 Base58' },
+    { value: '3', label: '中转 Base58' }
+  ]
+  const subscriptionSections = subscriptionSources.map(source => `
+    <div class="section">
+      <h3>📦 ${source.title}</h3>
+      ${subscriptionFormats.map(format => {
+        const url = `${publicOrigin}?format=${format.value}&source=${source.key}`
+        return `<div class="copy-row">
+          <span>${format.label}</span>
+          <code class="copyable">${escapeHtml(url)}</code>
+          <button class="copy-btn" type="button">复制</button>
+        </div>`
+      }).join('')}
+    </div>`).join('')
+  const escapedPublicOrigin = escapeHtml(publicOrigin)
+  const escapedDefaultPrefix = escapeHtml(defaultPrefix)
+
   const html = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -399,6 +443,63 @@ async function handleHomePage(publicOrigin, defaultPrefix) {
       font-size: 0.85em;
       margin-left: 8px;
     }
+    .section {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    .section h3 {
+      margin-bottom: 14px;
+      color: #333;
+      font-size: 1.1em;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 15px 0;
+      background: white;
+    }
+    td {
+      padding: 12px;
+      border: 1px solid #e5e7eb;
+      vertical-align: top;
+    }
+    td:first-child {
+      width: 22%;
+      min-width: 110px;
+      font-weight: 700;
+      background: #f4f4f4;
+      color: #333;
+    }
+    .copy-row {
+      display: grid;
+      grid-template-columns: 130px minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      margin: 10px 0;
+    }
+    .copy-row span {
+      color: #333;
+      font-weight: 600;
+    }
+    .copyable {
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .copy-btn {
+      border: 0;
+      border-radius: 6px;
+      background: #667eea;
+      color: white;
+      cursor: pointer;
+      font-size: 0.9em;
+      line-height: 1;
+      padding: 10px 14px;
+      min-width: 74px;
+    }
+    .copy-btn:hover { background: #5568d3; }
     .footer {
       margin-top: 40px;
       padding-top: 20px;
@@ -422,6 +523,13 @@ async function handleHomePage(publicOrigin, defaultPrefix) {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.5; }
     }
+    @media (max-width: 640px) {
+      body { padding: 20px 12px; }
+      .container { padding: 24px; }
+      h1 { font-size: 2em; }
+      .copy-row { grid-template-columns: 1fr; }
+      .copy-btn { width: 100%; }
+    }
   </style>
 </head>
 <body>
@@ -433,17 +541,17 @@ async function handleHomePage(publicOrigin, defaultPrefix) {
 
     <h2>📖 基本用法</h2>
     <p>在 API 请求前添加代理地址和 <code>?url=</code> 参数：</p>
-    <pre>${defaultPrefix}https://api.example.com/endpoint</pre>
+    <pre>${escapedDefaultPrefix}https://api.example.com/endpoint</pre>
 
     <div class="example">
       <strong>示例：代理一个 API 请求</strong><br><br>
       原始请求：<code>https://api.example.com/data?id=123</code><br>
-      通过代理：<code>${publicOrigin}/?url=https://api.example.com/data&id=123</code>
+      通过代理：<code>${escapedPublicOrigin}/?url=https://api.example.com/data&amp;id=123</code>
     </div>
 
     <h2>🚀 高级用法</h2>
     <p>使用专属路径避免缓存冲突（推荐）：</p>
-    <pre>${publicOrigin}/p/source1?url=https://api1.example.com/endpoint</pre>
+    <pre>${escapedPublicOrigin}/p/source1?url=https://api1.example.com/endpoint</pre>
     <p>为不同 API 源使用不同路径标识符（如 <code>/p/source1</code>、<code>/p/source2</code>），可以：</p>
     <ul>
       <li>避免不同源之间的缓存冲突</li>
@@ -455,9 +563,38 @@ async function handleHomePage(publicOrigin, defaultPrefix) {
     <p>所有额外的 query 参数都会自动转发到目标 API：</p>
     <div class="example">
       <strong>参数自动转发示例</strong><br><br>
-      请求：<code>${publicOrigin}/?url=https://api.example.com/list&page=1&limit=10</code><br>
+      请求：<code>${escapedPublicOrigin}/?url=https://api.example.com/list&amp;page=1&amp;limit=10</code><br>
       转发：<code>https://api.example.com/list?page=1&limit=10</code>
     </div>
+
+    <h2>📺 配置订阅</h2>
+    <p>支持直接输出 LunaTV/TVBox 可用配置，并可选择是否添加代理前缀或转换为 Base58。</p>
+    <div class="section">
+      <table>
+        <tr>
+          <td>format</td>
+          <td>
+            <code>0</code> 或 <code>raw</code> = 原始 JSON<br>
+            <code>1</code> 或 <code>proxy</code> = 添加代理前缀<br>
+            <code>2</code> 或 <code>base58</code> = 原始 Base58 编码<br>
+            <code>3</code> 或 <code>proxy-base58</code> = 代理 Base58 编码
+          </td>
+        </tr>
+        <tr>
+          <td>source</td>
+          <td>
+            <code>jin18</code> = 精简版<br>
+            <code>jingjian</code> = 精简版+成人<br>
+            <code>full</code> = 完整版（默认）
+          </td>
+        </tr>
+        <tr>
+          <td>prefix</td>
+          <td>自定义代理前缀，仅在 <code>format=1</code> 或 <code>format=3</code> 时生效。默认值：<code>${escapedDefaultPrefix}</code></td>
+        </tr>
+      </table>
+    </div>
+    ${subscriptionSections}
 
     <h2>✨ 功能特性</h2>
     <ul>
@@ -472,7 +609,7 @@ async function handleHomePage(publicOrigin, defaultPrefix) {
 
     <h2>🏥 健康检查</h2>
     <p>访问 <code>/health</code> 端点检查服务状态：</p>
-    <pre>${publicOrigin}/health</pre>
+    <pre>${escapedPublicOrigin}/health</pre>
 
     <div class="footer">
       <p>
@@ -482,6 +619,24 @@ async function handleHomePage(publicOrigin, defaultPrefix) {
       <p>Powered by Cloudflare Workers</p>
     </div>
   </div>
+  <script>
+    document.querySelectorAll('.copy-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const code = btn.parentElement.querySelector('.copyable');
+        if (!code) return;
+        const originalText = btn.innerText;
+        try {
+          await navigator.clipboard.writeText(code.innerText);
+          btn.innerText = '已复制';
+        } catch (err) {
+          btn.innerText = '复制失败';
+        }
+        setTimeout(() => {
+          btn.innerText = originalText;
+        }, 1500);
+      });
+    });
+  </script>
 </body>
 </html>`
 
